@@ -15,6 +15,7 @@
 #include "target/breakpoints.h"
 #include "helper/time_support.h"
 #include "riscv.h"
+#include "slsv.h"
 #include "gdb_regs.h"
 #include "rtos/rtos.h"
 
@@ -1416,6 +1417,13 @@ const struct command_registration riscv_command_handlers[] = {
 		.help = "RISC-V Command Group",
 		.usage = "",
 		.chain = riscv_exec_command_handlers
+	},
+	{
+		.name = "slsv",
+		.mode = COMMAND_ANY,
+		.help = "RISC-V SLSV Command Group",
+		.usage = "",
+		.chain = slsv_exec_command_handlers 		// ref to slsv.h for more information
 	},
 	COMMAND_REGISTRATION_DONE
 };
