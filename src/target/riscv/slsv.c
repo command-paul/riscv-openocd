@@ -225,7 +225,7 @@ static int cmd_0_halt	(Jim_Interp *interp, int argc, Jim_Obj * const *argv){
 	struct target *target = get_current_target(cmd_ctx);
 	retval= riscv_halt_all_harts(target);
 	if (retval != ERROR_OK)	LOG_ERROR("Unable to halt all harts");
-	LOG_ERROR("Halted all HART`s");
+	LOG_INFO("Halted all HART`s");
 	return retval;
 }
 static int cmd_1_resume	(Jim_Interp *interp, int argc, Jim_Obj * const *argv){
@@ -235,49 +235,66 @@ static int cmd_1_resume	(Jim_Interp *interp, int argc, Jim_Obj * const *argv){
 	retval= riscv_resume_all_harts(target);
 	if (retval != ERROR_OK) LOG_ERROR("Unable to resume all harts");
 	// Return response
+	LOG_INFO("Resumed all HART`s");
 	return retval;
 }
 static int cmd_2_stepi	(Jim_Interp *interp, int argc, Jim_Obj * const *argv){
 	int retval = JIM_OK;
 	struct command_context *cmd_ctx = current_command_context(interp);
 	struct target *target = get_current_target(cmd_ctx);
-	LOG_ERROR("%s Steped\n",target->type->name)	;
-	target_addr_t addr = 0;
-	int current_pc = 1;
+	LOG_INFO("%s Steped\n",target->type->name)	; // some issue with the step function because the line si not printing any more :(
+	target_addr_t addr = 0; // again carried forward from target.c
+	int current_pc = 1; // This is just something carried forward from target.c
 	target->type->step(target, current_pc, addr, 1);
-
-	//target->type->step();
-	// Parse Input
-		//The resume command is formatted so SLSV 2 HARTWINDOWSEL HARTWINDOW(S)
-		// returns the HARTWINDOWSEL HARTWINDOW(S)
-	// Process
-	// Return response
 	return retval;
 }
 static int cmd_3_stepn	(Jim_Interp *interp, int argc, Jim_Obj * const *argv){
 	int retval = JIM_OK;
-	// Parse Input
-		//The resume command is formatted so SLSV 3 HARTWINDOWSEL HARTWINDOW(S)
-		// returns the HARTWINDOWSEL HARTWINDOW(S)
-	// Process
-	// Return response
+	uint64_t steps;
+	int len;
+	char* s = (char*)Jim_GetString(argv[1],&len) ; //  Potential source of leaking memory  ?? get into spike docs to confirm 
+	getPackedHex(&steps,1,s,16);
+	steps = steps%65536;
+	struct command_context *cmd_ctx = current_command_context(interp);
+	struct target *target = get_current_target(cmd_ctx);
+	target_addr_t addr = 0; // again carried forward from target.c
+	int current_pc = 1; // This is just something carried forward from target.c
+	LOG_INFO("%s Stepping %lu\n",target->type->name , steps)	;
+	while(steps > 0){
+		target->type->step(target, current_pc, addr, 1); //  alternatively use the target_step functions
+		steps--;
+		if (steps%1000 == 0)LOG_INFO("->step<-\n");
+	}
+	// pls put something to habdle errors
 	return retval;
 }
 static int cmd_4_getAreg(Jim_Interp *interp, int argc, Jim_Obj * const *argv){
 	int retval = JIM_OK;
+	int len;
+	char* s = (char*)Jim_GetString(argv[1],&len) ; // look at openocd documentationa dn see if theis needs to be freed after use
+	uint64_t reg_list[1024]; // this is hardcoded because i dont want to start a malloc free bug hunt just yet - max queriable at once is 1024
+	getPackedHex(reg_list,len/5,s,5); //  the addresses are of len 5 because , although the spec needs only 4 , I`m adding one extra for more state vars
 	// Parse Input
 		// SLSV 4 <REGID><REGID><REGID>
 		// Here Each REG ID is ABITS WIDE A special Sequence of ALL ABITS set to 1 is a range fetch specifier
-	// Process
-	// Return response
+	char response[8192];
+	char* location=response;
+	struct command_context *cmd_ctx = current_command_context(interp);
+	struct target *target = get_current_target(cmd_ctx);
+	for( int i = 0 ; i < len/5 ; i++ ) { 
+		riscv_reg_t value;
+		riscv_get_register_on_hart(target,&value,0,reg_list[i]); //there is an assert hartid ==0 in rv0.11c
+		sprintf(location,"%016lx",value); // put some switch case on width ?? 
+		//LOG_ERROR("reg %lx :: value %lx \n",reg_list[i],value);
+		location+=16;
+	}
+	Jim_SetResultString(interp,response, -1);
 	return retval;
 }
 static int cmd_5_setAreg(Jim_Interp *interp, int argc, Jim_Obj * const *argv){
 	int retval = JIM_OK;
-	uint64_t tempy;
 	// Parse Input
 		//SLSV 5 <abits><value>....<abits><value>
-	getPackedHex(&tempy,1,"000",1);
 	// Process
 	// Return response
 	return retval;
