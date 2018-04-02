@@ -595,7 +595,7 @@ int dmstatus_read(struct target *target, uint32_t *dmstatus,
 	if (authenticated && !get_field(*dmstatus, DMI_DMSTATUS_AUTHENTICATED)) {
 		LOG_ERROR("Debugger is not authenticated to target Debug Module. "
 				"(dmstatus=0x%x). Use `riscv authdata_read` and "
-				"`riscv_authdata_write` commands to authenticate.", *dmstatus);
+				"`riscv authdata_write` commands to authenticate.", *dmstatus);
 		return ERROR_FAIL;
 	}
 	return ERROR_OK;
@@ -1313,7 +1313,7 @@ static int examine(struct target *target)
 	if (!get_field(dmstatus, DMI_DMSTATUS_AUTHENTICATED)) {
 		LOG_ERROR("Debugger is not authenticated to target Debug Module. "
 				"(dmstatus=0x%x). Use `riscv authdata_read` and "
-				"`riscv_authdata_write` commands to authenticate.", dmstatus);
+				"`riscv authdata_write` commands to authenticate.", dmstatus);
 		/* If we return ERROR_FAIL here, then in a multicore setup the next
 		 * core won't be examined, which means we won't set up the
 		 * authentication commands for them, which means the config script
@@ -2183,7 +2183,7 @@ static int read_memory(struct target *target, target_addr_t address,
 		uint32_t size, uint32_t count, uint8_t *buffer)
 {
 	RISCV013_INFO(info);
-	if (info->progbufsize >= 2)
+	if (info->progbufsize >= 2 && !riscv_prefer_sba)
 		return read_memory_progbuf(target, address, size, count, buffer);
 
 	if ((get_field(info->sbcs, DMI_SBCS_SBACCESS8) && size == 1) ||
@@ -2196,6 +2196,9 @@ static int read_memory(struct target *target, target_addr_t address,
 		else if (get_field(info->sbcs, DMI_SBCS_SBVERSION) == 1)
 			return read_memory_bus_v1(target, address, size, count, buffer);
 	}
+
+	if (info->progbufsize >= 2)
+		return read_memory_progbuf(target, address, size, count, buffer);
 
 	LOG_ERROR("Don't know how to read memory on this target.");
 	return ERROR_FAIL;
@@ -2550,8 +2553,9 @@ static int write_memory(struct target *target, target_addr_t address,
 		uint32_t size, uint32_t count, const uint8_t *buffer)
 {
 	RISCV013_INFO(info);
-	if (info->progbufsize >= 2)
+	if (info->progbufsize >= 2 && !riscv_prefer_sba)
 		return write_memory_progbuf(target, address, size, count, buffer);
+
 	if ((get_field(info->sbcs, DMI_SBCS_SBACCESS8) && size == 1) ||
 			(get_field(info->sbcs, DMI_SBCS_SBACCESS16) && size == 2) ||
 			(get_field(info->sbcs, DMI_SBCS_SBACCESS32) && size == 4) ||
@@ -2562,6 +2566,9 @@ static int write_memory(struct target *target, target_addr_t address,
 		else if (get_field(info->sbcs, DMI_SBCS_SBVERSION) == 1)
 			return write_memory_bus_v1(target, address, size, count, buffer);
 	}
+
+	if (info->progbufsize >= 2)
+		return write_memory_progbuf(target, address, size, count, buffer);
 
 	LOG_ERROR("Don't know how to write memory on this target.");
 	return ERROR_FAIL;
