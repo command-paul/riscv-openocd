@@ -1590,6 +1590,7 @@ const struct command_registration riscv_command_handlers[] = {
 		.usage = "",
 		.chain = slsv_exec_command_handlers 		// ref to slsv.h for more information
 	},
+	{
 		.name = "arm",
 		.mode = COMMAND_ANY,
 		.help = "ARM Command Group",
