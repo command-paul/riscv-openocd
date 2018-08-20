@@ -750,6 +750,7 @@ static int write_abstract_arg(struct target *target, unsigned index,
 static uint32_t access_register_command(uint32_t number, unsigned size,
 		uint32_t flags)
 {
+	//LOG_ERROR("Access register command arguments: number %u , size %u , flags %u \n", number , size ,flags);
 	uint32_t command = set_field(0, DMI_COMMAND_CMDTYPE, 0);
 	switch (size) {
 		case 32:
@@ -772,9 +773,9 @@ static uint32_t access_register_command(uint32_t number, unsigned size,
 		command = set_field(command, AC_ACCESS_REGISTER_REGNO,
 				number - GDB_REGNO_CSR0);
 	} else {
-		assert(0);
+		command = set_field(command, AC_ACCESS_REGISTER_REGNO,number);
+		LOG_WARNING("You Are Accessing Custom Register Number %u of size %u \n",number,size);
 	}
-
 	command |= flags;
 
 	return command;
@@ -783,6 +784,7 @@ static uint32_t access_register_command(uint32_t number, unsigned size,
 static int register_read_abstract(struct target *target, uint64_t *value,
 		uint32_t number, unsigned size)
 {
+	//LOG_ERROR("register read abstract arguments: number %u , size %u \n", number , size );
 	RISCV013_INFO(info);
 
 	if (number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31 &&
@@ -818,6 +820,7 @@ static int register_read_abstract(struct target *target, uint64_t *value,
 static int register_write_abstract(struct target *target, uint32_t number,
 		uint64_t value, unsigned size)
 {
+	//LOG_ERROR("register write abstract arguments: number %u , size %u \n", number , size );
 	RISCV013_INFO(info);
 
 	if (number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31 &&
@@ -1059,10 +1062,15 @@ static unsigned register_size(struct target *target, unsigned number)
 {
 	/* If reg_cache hasn't been initialized yet, make a guess. We need this for
 	 * when this function is called during examine(). */
+	unsigned result = 0;
+	if ( number > 0x1040) return  riscv_xlen(target);
 	if (target->reg_cache)
-		return target->reg_cache->reg_list[number].size;
+		result = target->reg_cache->reg_list[number].size;
 	else
-		return riscv_xlen(target);
+		result = riscv_xlen(target);
+	
+	//LOG_ERROR("Register Size ::%u , %u \n",number,result);
+	return result;
 }
 
 /**
@@ -1167,10 +1175,12 @@ static int register_read(struct target *target, uint64_t *value, uint32_t number
 	int result = register_read_direct(target, value, number);
 	if (result != ERROR_OK)
 		return ERROR_FAIL;
-	if (target->reg_cache) {
-		struct reg *reg = &target->reg_cache->reg_list[number];
-		buf_set_u64(reg->value, 0, reg->size, *value);
-		reg->valid = true;
+	if(number < 0x1041){
+		if (target->reg_cache) {
+			struct reg *reg = &target->reg_cache->reg_list[number];
+			buf_set_u64(reg->value, 0, reg->size, *value);
+			reg->valid = true;
+		}
 	}
 	return ERROR_OK;
 }
@@ -2000,6 +2010,7 @@ static int read_memory_bus_v1(struct target *target, target_addr_t address,
 static int read_memory_progbuf(struct target *target, target_addr_t address,
 		uint32_t size, uint32_t count, uint8_t *buffer)
 {
+	//LOG_ERROR("register read memory progbuf abstract arguments: address %lu , size %u \n", address , size );
 	RISCV013_INFO(info);
 
 	int result = ERROR_OK;
@@ -2436,7 +2447,7 @@ static int write_memory_progbuf(struct target *target, target_addr_t address,
 		uint32_t size, uint32_t count, const uint8_t *buffer)
 {
 	RISCV013_INFO(info);
-
+	//LOG_ERROR("register write memory progbuf abstract arguments: address %lu , size %u \n", address , size );
 	LOG_DEBUG("writing %d words of %d bytes to 0x%08lx", count, size, (long)address);
 
 	select_dmi(target);
